@@ -1,0 +1,210 @@
+# Syntax
+
+Below serves as a reference to the syntax of Owl.
+
+## Overview
+
+Owl is composed of _specification-level_ objects, such as [names](#names) and [(data) types](#types), and [expressions](#expressions), which are meant to be run. 
+
+The specification-specific syntax of Owl is stratified in a number of layers: 
+- [names](#names), which are type-level cryptographic keys;
+- [labels](#labels), which drive Owl's information-flow typing rules;
+- [types](#types), which specify the types of data; and
+- [name types](#name-types), which can be thought of as specifications for names (as types are specifications for data). 
+
+
+## Names
+
+Names in Owl are cryptographic keys which are reflected to the type level. Names can either be _base names_, given by an identifier (e.g., `n`), or _derived_ names of the form `KDF<...>(...)` (explained below).
+
+
+Base names are created by a _name declaration_:
+
+```owl
+name k : nt @ loc
+```
+
+where `nt` is a [name type](#name-types) and `loc` is a [locality](#localities). 
+In an expression, you can obtain the value of `k` by calling `get(k)` (this will not work if the code is running at a different locality than the name, however).
+The type of `get(k)` is `Name(k)` (explained [below](#types)). 
+
+Name declarations (among other things) can be _indexed_, as so:
+
+```owl
+name k<i, j @ k> : enckey t @ loc<k>
+```
+
+This creates a name `k` indexed by two _session IDs_, `i` and `j`, and a _party ID_ `k`. All indices may be used in the type `t`, but only party IDs may be used in the associated locality. 
+
+### KDF Names
+
+Aside from assuming names as input to the protocol, names can also be _derived_ via a call to a key derivation function. Owl currently supports HKDF. 
+A secure output of HKDF results in value of type `Name(KDF<nk_1 || ... || nk_n; i; nt>(a, b, c))`.
+Details about the KDF operation and `KDF` name are specified [here](./hkdf.md).
+
+### Grammar 
+
+```
+N ::= n // Base name
+   |  n<i@j> // Indexed name
+   |  KDF<nk_1 || ... || nk_n; i; nt>(a, b, c) // KDF Name
+```
+
+
+## Labels
+
+Labels form the basis of Owl's information flow analysis. 
+The two most important labels are _name labels_ and the _adversary labels_.
+If `N` is a [name](#names), then `[N]` is the label associated to `N`. (For example, `get(N)` has label `[N]`). The adversary label, `adv`, is the label for public data. 
+Owl labels form a _semilattice_, meaning that there is a binary operation `/\` between labels that constructs the least upper bound of the two labels. 
+
+Here is an example piece of code that exercises labels:
+```owl
+locality alice
+name n : nonce @ alice
+name m : nonce @ alice
+
+def foo() @ alice : Unit = 
+    input i in 
+    let j : Data<adv> = i in 
+    let x : Data<[n]> = get(n) in 
+    let y : Data<[m]> = get(m) in 
+    let z : Data<[n] /\ [m]> = x ++ y in 
+    ()
+```
+After defining two names `n` and `m`, we take an input `i` from the network inside of `foo`. 
+We then assign `i` to `j`, and give it the type `Data<adv>`; this type represents "data labelled at `adv`". Hence, `x` has type `Data<[n]>`, `y` has type `Data<[m]>`, and `x ++ y` has type `Data<[n] /\ [m]>` (since we are combining `x` and `y` through concatenation).
+
+### Indexed joins of labels
+
+In more complicated code, one might have an indexed name `n<i>` and need to represent the label for data that depends on _some_ `n<i>`, but we don't know which one. In this case, one can use an _indexed join_:
+
+```owl
+locality alice
+name n<i> : nonce @ alice
+
+def foo<i>() @ alice : Unit = 
+    input i in 
+
+    let x : Data<[n<i>]> = get(n<i>) in 
+    let y : Data</\_k [n<k>]> = x in 
+    ()
+```
+
+Here, the label `/\_k [n<k>]` is the join over all labels of the form `[n<k>]`, for all `k`. 
+
+## Information Flow Ordering
+
+Given two labels `L1` and `L2`, the [proposition](#propositions) `L1 <= L2` states that label `L1` flows to `L2`. The bottom of the information flow lattice is `static` (so `static` flows to everything). 
+
+We use the information flow order to define corruption. We say that the name `n` is _corrupt_ if `[n] <= adv`, and is _secret_ otherwise (which we write as `[n] !<= adv`).
+
+A central part of Owl is that the information flow ordering is influenced by crytographic primitives. If `n` is an encryption key for data labeled at `L`, then we get that `L <= [n]`. More details are given when discussing [cryptographic operations](./crypto.md).
+
+### Grammar
+
+```
+L ::= [N]
+    | static
+    | adv
+    | L /\ L
+    | /\_i L   // Join over index
+```
+
+In addition to the above, there are a few labels internal to the implementation of Owl --- `top` and `ghost` --- but these can be safely ignored in user code.
+
+## Types
+
+Cryptographic security in Owl is expressed via types. Owl types can be thought of as having two components: a _secrecy_ component, expressed using information-flow labels; and an _integrity_ component, expressed using refinement and singleton types. As is common in information-flow type systems, Owl types support _subtyping_, which states when data in one type can be considered to have another type. 
+
+## Basic Types
+
+Logically, _all_ data in Owl are bytestrings --- even structs and enums, which should be thought of as holding their parsed representations (where structs have their field concatenated, and enums are implicitly tagged unions). 
+
+### Data Types
+
+Suppose `L` and `L'` are [labels](#labels), and `a` is an [atomic expression](#atomic-expressions). Then, the types `Data<L>`, `Data<L, |L|>` and `Data<L> |a|` all represent arbitrary data (i.e., bytestrings) with various secrecy and integrity information.
+
+- The type `Data<L>` represents arbitrary data with secrecy `L`.
+- The type `Data<L, |L'|>` represents arbitrary data with secrecy `L`, where the _length_ of that data has label `L'`. This is mostly used in the form `Data<L, |adv|>`, which represents public-length data. 
+- The type `Data<L> |a|` represents data with secrecy `L`, where the length of that data is statically known to have length equal to the value of `a`. The most common use case here is where `a` is a constant: e.g., `Data<adv> |32|`, for 32-byte length data, or `Data<adv> | |nonce| |`, where `|nonce|` is the constant for the length of a `nonce` name. 
+
+The above types use the information-flow lattice to define the subtyping order. For example, `Data<L>` is a subtype of `Data<L'>` whenever `L <= L'. 
+
+### Unit
+
+### Bool
+
+
+## Refinement Types
+
+## Structs, Enums, and Option Types
+
+## Singleton Types
+
+## Exists Types
+
+
+```
+t ::=  
+    | Data<L>
+    | Data<L> |aexpr| 
+    | Data<L, |L|> // L : Label
+    | Ghost
+    | x:t{phi} // phi : Prop
+    | Option t
+    | s // where s is a struct or enum
+    | if prop then t else t
+    | Bool<L> // L : Label
+    | Unit
+    | Name(n) // n : Name
+    | vk(n) // n : Name, n must have name type sigkey t for some t
+    | dhpk(n) // n : Name, n must have name type DH
+    | encpk(n) // n : Name, n must have name type pkekey t
+    | shared_secret(n, m) // n, m : Name, must have name type DH
+    | exists i. t // binds an index i in t
+    | Const(HC) // HC is a hex constant, eg 0x1234
+```
+
+### Subtyping
+
+## Name Types
+
+A _name type_ is a specification for a name, and is part of a name declaration. For example:
+
+```owl
+locality alice
+name n : nonce @ alice
+name k : enckey Name(n) @ alice
+```
+Here, `nonce` and `enckey Name(n)` are name types. Each name type is in one-to-one correspondence to  a keyed cryptographic primitives. More details are given [here](./crypto.md).
+
+## Localities
+
+Localities specify the parties of the protocol. Every compiled name declaration and `def` must be attached to a locality. Localities for a single party are declared simply as 
+```owl
+locality alice
+```
+while a _family_ of localities (e.g., specifying a protocol between $n$ servers and clients) are specified with an _arity_, like so:
+```owl
+locality Server : 1
+locality Client : 1
+```
+Here, the `1` represents the number of _party IDs_ the locality takes as input. For example, we may declare this:
+```owl
+name n<@j> : Server<j> 
+```
+to mean that each server stores a _single_ name; while this:
+```owl
+name n<i@j> : Server<j>
+```
+means that each server `Server<j>` stores a family of names `n<i,j>`. Here, `i` is a _session ID_; party IDs and session IDs are detailed in [indices](#indices).
+
+
+## Indices
+
+## Propositions
+
+## Expressions
+
+### Atomic expressions
