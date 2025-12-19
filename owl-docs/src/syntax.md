@@ -131,19 +131,161 @@ Suppose `L` and `L'` are [labels](#labels), and `a` is an [atomic expression](#a
 
 The above types use the information-flow lattice to define the subtyping order. For example, `Data<L>` is a subtype of `Data<L'>` whenever `L <= L'. 
 
-### Unit
+A unifying principle of Owl is that _all data are bytestrings_. Thus, the (non-ghost component 
+
+### Unit and Lemma
+
+The type `Unit` (with distinguished element `()`) behaves as it does in other languages. Importantly, however, the `Unit` type can be [_refined_](#refinement-types), just as any other type can be. Thus, we can say things like:
+
+```owl
+locality alice
+
+def foo(x : Data<adv>, pf : (_:Unit{x != 0x1234})) @ alice : Unit = 
+    ()
+
+```
+
+Here, we refine the `Unit` type with a proof that `x` is not equal to `0x1234`. (We could have refined `x` as well, but it is often convenient to detatch the proof from the data). In this special case, we can also type:
+
+```owl
+def foo(x : Data<adv>, pf : Lemma{x != 0x1234}) @ alice : Unit = 
+    ()
+```
+
+Here, `Lemma{P}` is sugar for `_:Unit{P}`.
 
 ### Bool
+
+If `L` is an information flow label, then `Bool<L>` is the type of booleans with secrecy level `L`. Just like with `Data`, `Bool` respects subtyping with respect to the level `L`.
 
 
 ## Refinement Types
 
+To express arbitrary integrity properties, Owl supports _refinement types_. If `T` is a type, and `P` is a [proposition](#propositions) that mentions `x : T`, then `x:T{P}` is a type. Refinement types in Owl behave similarly to [F*](https://fstar-lang.org/tutorial/), and are checked using an SMT solver. 
+
 ## Structs, Enums, and Option Types
+
+Owl supports byte-precise data types via structs and enums. 
+
+### Structs
+
+Below is a simple struct, used in our formalization of WireGuard:
+
+```owl
+// And the transport layer message
+struct transp {
+      _transp_tag : Const(0x04000000)
+    , _transp_receiver : Data<adv> |4|
+    , _transp_counter  : Data<adv> | |counter| | 
+    , _transp_packet   : Data<adv> 
+}
+```
+
+A struct is defined by a number of fields, specified by an identifier and a type. 
+The naming scheme we use here for each field (`_struct_field`) is not necessary, but useful for namespacing. 
+The first field here has a [const](#const) type, while the next two are [data types refined with a length](#data-types), and the last is simply public data. 
+
+#### Dependent Structs 
+
+The types in structs can depend on previous values:
+```owl
+locality alice
+
+struct ne_pair {
+    x : Data<adv> | 2 |, 
+    y : (z:Data<adv> | 2 | {z != x}) 
+}
+
+def foo() @ alice : Unit = 
+    let v : ne_pair = ne_pair(0x1234, 0x5678) in  // OK 
+    let v2 : ne_pair = ne_pair(0x1234, 0x1234) in  // Fails to type check
+    ()
+```
+
+#### Invalid Structs (and other data)
+
+Since [all data in Owl are byte strings](#basic-types), building a struct may have meaning even if the corresponding type refinements in the struct do not hold. We model this through the following strategy: _applying invalid arguments to a function results in the information-flow approximation to their type_. In the case of structs, this is justified since a constructor for a struct in Owl's semantics is simply a function which concatenates its arguments together. 
+
+We can see this here:
+```owl
+
+// tst.owl
+
+locality alice
+
+name n : nonce @ alice
+
+struct ne_pair {
+    x : Data<adv> | 2 |, 
+    y : (z:Data<adv> | 2 | {z != x}) 
+}
+
+def foo() @ alice : Unit = 
+    let v : ne_pair = ne_pair(0x1234, 0x5678) in 
+    let v2 = ne_pair(get(n), 0x) in  // 0x = empty byte string
+    debug printTyOf(v); 
+    debug printTyOf(v2); 
+    ()
+```
+
+When we run the above code with `cabal run owl -- tst.owl --log-typecheck`, we get the following output:
+
+```
+  Type for v: ne_pair
+  Type for v2: .res:(Data<[n]>){.res == ne_pair(get(n), 0x)}
+```
+
+Here, `v` is a valid `ne_pair` (because all relevant subtyping queries succeeded), while `v2` is not. In this case, Owl simply re-interprets `ne_pair` as the concatenation function. 
+
+In the type refinement for `v2`, we see that Owl remembers that the value of `v2` is equal to `ne_pair(get(n), 0x)`. (In type refinements, `ne_pair` is interpreted as a pure function on byte strings.)
+
+
+#### Parsing
+
+Since a value of type `ne_pair` is regarded as a specially formatted byte string, we do not destruct it via `.` syntax, as one does in C. Instead, we have _parse_ statements:
+
+```owl
+locality alice
+
+name n : nonce @ alice
+
+struct ne_pair {
+    x : Data<adv> | 2 |, 
+    y : (z:Data<adv> | 2 | {z != x}) 
+}
+
+def foo() @ alice : Unit = 
+    let v : ne_pair = ne_pair(0x1234, 0x5678) in 
+    parse v as ne_pair(a, b) in 
+    ()
+```
+
+More details are given [below](#parsing-structs).
 
 ## Singleton Types
 
+A _singleton type_ is a type with exactly one inhabitant. Other than [unit](#unit-and-lemma), Owl uses singleton types pervasively to reason about type refinements. 
+
+### Const
+
+Given a fixed byte sequence, such as `0x1234`, `Const(0x1234)` is the singleton type for exactly that byte sequence. Such a type is useful to specify tags in TLV formats, for example. Since `0x1234` is a hardcoded constant, this type is a subtype of `Data<static>`. 
+
+### Name
+
+A _name type_ is a specification for a name, and is part of a name declaration. For example:
+
+```owl
+locality alice
+name n : nonce @ alice
+name k : enckey Name(n) @ alice
+```
+Here, `nonce` and `enckey Name(n)` are name types. Each name type is in one-to-one correspondence to  a keyed cryptographic primitives. More details are given [here](./crypto.md).
+
 ## Exists Types
 
+## Ghost
+
+## If-then-else types
 
 ```
 t ::=  
@@ -168,16 +310,6 @@ t ::=
 
 ### Subtyping
 
-## Name Types
-
-A _name type_ is a specification for a name, and is part of a name declaration. For example:
-
-```owl
-locality alice
-name n : nonce @ alice
-name k : enckey Name(n) @ alice
-```
-Here, `nonce` and `enckey Name(n)` are name types. Each name type is in one-to-one correspondence to  a keyed cryptographic primitives. More details are given [here](./crypto.md).
 
 ## Localities
 
@@ -206,5 +338,11 @@ means that each server `Server<j>` stores a family of names `n<i,j>`. Here, `i` 
 ## Propositions
 
 ## Expressions
+
+### Pattern Matching
+
+#### Parsing Structs
+
+#### Case Analysis on Enums
 
 ### Atomic expressions
