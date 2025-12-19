@@ -117,11 +117,11 @@ In addition to the above, there are a few labels internal to the implementation 
 
 Cryptographic security in Owl is expressed via types. Owl types can be thought of as having two components: a _secrecy_ component, expressed using information-flow labels; and an _integrity_ component, expressed using refinement and singleton types. As is common in information-flow type systems, Owl types support _subtyping_, which states when data in one type can be considered to have another type. 
 
-## Basic Types
+### Basic Types
 
 Logically, _all_ data in Owl are bytestrings --- even structs and enums, which should be thought of as holding their parsed representations (where structs have their field concatenated, and enums are implicitly tagged unions). 
 
-### Data Types
+#### Data Types
 
 Suppose `L` and `L'` are [labels](#labels), and `a` is an [atomic expression](#atomic-expressions). Then, the types `Data<L>`, `Data<L, |L|>` and `Data<L> |a|` all represent arbitrary data (i.e., bytestrings) with various secrecy and integrity information.
 
@@ -133,7 +133,7 @@ The above types use the information-flow lattice to define the subtyping order. 
 
 A unifying principle of Owl is that _all data are bytestrings_. Thus, the (non-ghost component 
 
-### Unit and Lemma
+#### Unit and Lemma
 
 The type `Unit` (with distinguished element `()`) behaves as it does in other languages. Importantly, however, the `Unit` type can be [_refined_](#refinement-types), just as any other type can be. Thus, we can say things like:
 
@@ -154,20 +154,20 @@ def foo(x : Data<adv>, pf : Lemma{x != 0x1234}) @ alice : Unit =
 
 Here, `Lemma{P}` is sugar for `_:Unit{P}`.
 
-### Bool
+#### Bool
 
 If `L` is an information flow label, then `Bool<L>` is the type of booleans with secrecy level `L`. Just like with `Data`, `Bool` respects subtyping with respect to the level `L`.
 
 
-## Refinement Types
+### Refinement Types
 
 To express arbitrary integrity properties, Owl supports _refinement types_. If `T` is a type, and `P` is a [proposition](#propositions) that mentions `x : T`, then `x:T{P}` is a type. Refinement types in Owl behave similarly to [F*](https://fstar-lang.org/tutorial/), and are checked using an SMT solver. 
 
-## Structs, Enums, and Option Types
+### Structs, Enums, and Option Types
 
 Owl supports byte-precise data types via structs and enums. 
 
-### Structs
+#### Structs
 
 Below is a simple struct, used in our formalization of WireGuard:
 
@@ -183,9 +183,9 @@ struct transp {
 
 A struct is defined by a number of fields, specified by an identifier and a type. 
 The naming scheme we use here for each field (`_struct_field`) is not necessary, but useful for namespacing. 
-The first field here has a [const](#const) type, while the next two are [data types refined with a length](#data-types), and the last is simply public data. 
+The first field here has a [const](#const) type, while the next two are [data types refined with a length](#data-types), and the last is simply public data. While the above struct is used for a network format, Owl structs can also be used for internal data structures for protocols, such as a record of the most recently derived secret keys. 
 
-#### Dependent Structs 
+##### Dependent Structs 
 
 The types in structs can depend on previous values:
 ```owl
@@ -202,7 +202,7 @@ def foo() @ alice : Unit =
     ()
 ```
 
-#### Invalid Structs (and other data)
+##### Invalid Structs (and other data)
 
 Since [all data in Owl are byte strings](#basic-types), building a struct may have meaning even if the corresponding type refinements in the struct do not hold. We model this through the following strategy: _applying invalid arguments to a function results in the information-flow approximation to their type_. In the case of structs, this is justified since a constructor for a struct in Owl's semantics is simply a function which concatenates its arguments together. 
 
@@ -240,7 +240,7 @@ Here, `v` is a valid `ne_pair` (because all relevant subtyping queries succeeded
 In the type refinement for `v2`, we see that Owl remembers that the value of `v2` is equal to `ne_pair(get(n), 0x)`. (In type refinements, `ne_pair` is interpreted as a pure function on byte strings.)
 
 
-#### Parsing
+##### Parsing
 
 Since a value of type `ne_pair` is regarded as a specially formatted byte string, we do not destruct it via `.` syntax, as one does in C. Instead, we have _parse_ statements:
 
@@ -262,15 +262,15 @@ def foo() @ alice : Unit =
 
 More details are given [below](#parsing-structs).
 
-## Singleton Types
+### Singleton Types
 
 A _singleton type_ is a type with exactly one inhabitant. Other than [unit](#unit-and-lemma), Owl uses singleton types pervasively to reason about type refinements. 
 
-### Const
+#### Const
 
 Given a fixed byte sequence, such as `0x1234`, `Const(0x1234)` is the singleton type for exactly that byte sequence. Such a type is useful to specify tags in TLV formats, for example. Since `0x1234` is a hardcoded constant, this type is a subtype of `Data<static>`. 
 
-### Name
+#### Name
 
 A _name type_ is a specification for a name, and is part of a name declaration. For example:
 
@@ -281,12 +281,50 @@ name k : enckey Name(n) @ alice
 ```
 Here, `nonce` and `enckey Name(n)` are name types. Each name type is in one-to-one correspondence to  a keyed cryptographic primitives. More details are given [here](./crypto.md).
 
-## Exists Types
+### Exists Types
 
-## Ghost
 
-## If-then-else types
+### If-then-else types
 
+If `p` is a [proposition](#propositions), and `t1` / `t2` are types, then `if p then t1 else t2` is a type. If Owl can prove that `p` holds (or doesn't hold), then this type will automatically simplify to `t1` (respectively, `t2`). 
+
+If-then-else types are most useful for specifying the return types of procedures that depend on whether something is corrupted. For example:
+
+```owl
+locality alice
+locality bob
+
+name n : nonce
+name K : enckey Name(n)
+
+def server (k : Name(K)) @ bob : if sec(K) then Option Name(n) else Option Data<adv> = 
+    input i in 
+    adec(k, i)
+```
+
+The return type of the server states that if the name `K` is a secret, we get a value of type `Option Name(n)` (i.e., a value which is either `None` or `Some(v)`, where `v = get(n)`); if `K` is corrupt, then we get `Option Data<adv>`. This is achieved using [authenticated encryption](./aenc.md).
+
+
+### Ghost
+
+It is often useful to add information to a data structure that only exists for proof purposes. An example of this is given below:
+
+```owl
+
+name eph : DH @ alice
+name n : nonce @ alice 
+
+struct stage2_t {
+    recvd_eph_pk : Ghost,
+    val : if recvd_eph == dhpk(get(eph)) then  Name(n) else Data<adv>
+}
+```
+Here, we have a pair of two values: the first, which has no runtime representation, represents a received ephemeral public key. 
+The second has an [if-then-else type](#if-then-else-types) which states that the `val` is equal to `get(n)` if the ephemeral key is the expected one, and arbitrary junk data otherwise.  
+
+### Subtyping
+
+### Grammar of Types
 ```
 t ::=  
     | Data<L>
@@ -308,7 +346,6 @@ t ::=
     | Const(HC) // HC is a hex constant, eg 0x1234
 ```
 
-### Subtyping
 
 
 ## Localities
