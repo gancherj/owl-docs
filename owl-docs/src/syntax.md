@@ -323,7 +323,6 @@ struct stage2_t {
 Here, we have a pair of two values: the first, which has no runtime representation, represents a received ephemeral public key. 
 The second has an [if-then-else type](#if-then-else-types) which states that the `val` is equal to `get(n)` if the ephemeral key is the expected one, and arbitrary junk data otherwise.  
 
-### Subtyping
 
 ### Grammar of Types
 ```
@@ -409,7 +408,32 @@ Indices are introduced into struct declarations without regard for their type (t
 
 ## Propositions
 
+A _proposition_ is a proof-level property that may be true or false. Propositions in Owl are checked using an SMT solver. We can see them at work here:
+
+```owl
+locality alice
+
+def client(x : Data<adv> |2|, y : Data<adv> |2|, z : Data<adv> |2|, w : Data<adv> |2| ) @ alice : Unit = 
+    assert (123 == 123);
+    assert ((concat(x, y) == concat(z, w)) ==> (x == z));
+    ()
+```
+
+Assert statements carry propositions, and fail to type check if the SMT solver fails to prove that the proposition is always true. We can see in the second line that the SMT solver can be used to prove nontrivial facts, such as the fact that concatenation is injective (when appropriate side conditions on lengths hold). 
+
+Propositions can show up in [refinement types](#refinement-types), [if-then-else types](#if-then-else-types), [assert/assume expressions](#assertassume), and [pcase expressions](#case-splitting-on-a-proposition), among other places.
+
+### Grammar
+
+TODO
+
 ## Expressions
+
+
+### Assert/assume
+
+### Case-Splitting on a Proposition
+
 
 ### Pattern Matching
 
