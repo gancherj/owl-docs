@@ -239,6 +239,7 @@ Here, `v` is a valid `ne_pair` (because all relevant subtyping queries succeeded
 
 In the type refinement for `v2`, we see that Owl remembers that the value of `v2` is equal to `ne_pair(get(n), 0x)`. (In type refinements, `ne_pair` is interpreted as a pure function on byte strings.)
 
+(Details for the `debug` expression are given [here](#debug-expressions).)
 
 ##### Parsing
 
@@ -361,16 +362,50 @@ locality Client : 1
 ```
 Here, the `1` represents the number of _party IDs_ the locality takes as input. For example, we may declare this:
 ```owl
-name n<@j> : Server<j> 
+name n<@j> : nonce @ Server<j> 
 ```
 to mean that each server stores a _single_ name; while this:
 ```owl
-name n<i@j> : Server<j>
+name n<i@j> : nonce @ Server<j>
 ```
 means that each server `Server<j>` stores a family of names `n<i,j>`. Here, `i` is a _session ID_; party IDs and session IDs are detailed in [indices](#indices).
 
 
 ## Indices
+
+To handle protocols with a polynomial number of parties, or a polynomial number of sessions for each party, Owl has a notion of an _index_. Indices can be thought of as type-level numbers (albeit ones that cannot be added, but just passed around). Indices come in three types: _party IDs_, which are used to index a collection of parties (e.g., the `i`th client); _session IDs_, which are used to index within a computation carried out by a single locality (e.g., the `i`th Diffie-Hellman computation done by a particular party); and _ghost indices_, which only have proof content. 
+
+We introduce indices during computations by having index arguments to `def`s:
+
+```owl
+locality Server : 1
+name n<i@j> : nonce @ Server<j>
+def client_main<i@j>(x : Name(n<i@j>)) @ Server<j> : Unit = 
+    let y = get(n<i@j>) in 
+    assert (x == y);
+    ()
+```
+
+First, we have a locality with an _arity_ 1, meaning it takes one party ID.
+Then, we have the indexed name `n<i@j>`, which takes a session ID `i` and a party ID `j`. (The `@` symbol separates session IDs from party IDs). Index arguments are then introduced after the method name during a `def`. 
+
+Structs and enums can also be indexed:
+```owl
+locality Server : 1
+name n<i@j> : nonce @ Server<j>
+
+struct MyStruct<i,j> {
+    v : Name(n<i@j>)
+}
+
+def client_main<i@j>(s : MyStruct<session i,pid j>) @ Server<j> : Unit = 
+    ()
+```
+
+Due to a current design limitation, the syntax for indices is a bit different for structs and enums.  
+Indices are introduced into struct declarations without regard for their type (thus, we have `<i,j>` instead of `<i@j>`). When making reference to a struct type (e.g., for `MyStruct`), one must then annotate the index type (hence, we have `MyStruct<session i, pid j>`.)
+
+
 
 ## Propositions
 
@@ -381,5 +416,7 @@ means that each server `Server<j>` stores a family of names `n<i,j>`. Here, `i` 
 #### Parsing Structs
 
 #### Case Analysis on Enums
+
+### Debug Expressions
 
 ### Atomic expressions
