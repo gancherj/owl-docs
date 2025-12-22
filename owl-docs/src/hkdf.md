@@ -1,1 +1,1 @@
-# HKDF
+# Diffie-Hellman and HKDF

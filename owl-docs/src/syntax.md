@@ -42,13 +42,37 @@ Aside from assuming names as input to the protocol, names can also be _derived_ 
 A secure output of HKDF results in value of type `Name(KDF<nk_1 || ... || nk_n; i; nt>(a, b, c))`.
 Details about the KDF operation and `KDF` name are specified [here](./hkdf.md).
 
+### Name Types
+
+Each name in Owl has a _name type_, which is intuitively the cryptographic permissions that the corresponding key is allowed to be used for. 
+Each [cryptographic operation](./crypto.md) has a corresponding name type.
+
+
+
 ### Grammar 
+
+Names:
 
 ```
 N ::= n // Base name
    |  n<i@j> // Indexed name
    |  KDF<nk_1 || ... || nk_n; i; nt>(a, b, c) // KDF Name
 ```
+
+Name Types:
+
+Below is an (incomplete) list of some name types supported by Owl:
+
+- `DH`, for [Diffie-Hellman](./hkdf.md);
+- `nonce`, for [random, unstructured secrets](./nonce.md)
+- `nonce |LC|`, for [random, unstructured secrets](./nonce.md) where `|LC|` is a [length constant](#length-constants);
+- `sigkey T`, for [signing keys](./signatures.md);
+- `enckey T`, for [encryption keys](./aenc.md);
+- `pkekey T`, for [public encryption keys](./pke.md);
+- `mackey T`, for [MAC keys](./mac.md);
+- `NT<..>(x, y, .., z)` for name type abbreviations. Here, `<..>` contains (optional) [index](#indices) parameters; while `x, y, ..., z` are arguments given as [atomic expressions](#atomic-expressions);
+- `st_aead ...`, for stateful AEAD [details here](./aenc.md);
+- `kdf ...` and `dualkdf ...` for KDF keys [details here](./hkdf.md).
 
 
 ## Labels
@@ -93,7 +117,7 @@ def foo<i>() @ alice : Unit =
 
 Here, the label `/\_k [n<k>]` is the join over all labels of the form `[n<k>]`, for all `k`. 
 
-## Information Flow Ordering
+### Information Flow Ordering
 
 Given two labels `L1` and `L2`, the [proposition](#propositions) `L1 <= L2` states that label `L1` flows to `L2`. The bottom of the information flow lattice is `static` (so `static` flows to everything). 
 
@@ -425,10 +449,86 @@ Propositions can show up in [refinement types](#refinement-types), [if-then-else
 
 ### Grammar
 
-TODO
+```
+p ::= // prop
+    | True
+    | False
+    | corr(N) // N : Name. N is corrupt; same as [N] <= adv
+    | sec(N) // N : Name. N is secret; same as [N] !<= adv
+    | let x = a in p // a : atomic expr
+    | a1 == a2 // a1, a2 : atomic expr
+    | a1 != a2 // a1, a2 : atomic expr
+    | i1 =idx i2 // i1, i2 : index
+    | i1 !=idx i2 // i1, i2 : index
+    | l1 <= l2 // l1, l2 : label
+    | l1 !<= l2 // l1, l2 : label
+    | happened(foo<..>(x, y, ..., z)) // foo is a method name; <..> are index parameters (optional); x, y, .., z are arguments (atomic exprs)
+    | forall x : idx, y : idx, ..., z : idx. p // x, y, z are identifiers
+    | forall x : bv, y : bv, ..., z : bv. p // x, y, z are identifiers
+    | aad(N)[a] // N : Name, a : atomic expr
+    | in_odh(a, b, c) // a, b, c : atomic expr
+    | honest_pk_enc<N>(a) // N : Name, a : atomic expr
+    | foo<...>[x, y, .., z] // foo is a predicate; <..> are index  parameters (optional); x, y, .., z are arguments (atomic exprs)
+    | a // a : atomic expr. Implicit cast to (a == true)
+```
 
 ## Expressions
 
+Computations in Owl are carried out by _expressions_. Expressions are stratified into two levels: [_atomic expressions_](#atomic-expressions), which represent pure computations; and _effectful expressions_. Note that in Owl, cryptographic operations are considered effectful. 
+
+### Atomic Expressions
+
+Atomic expressions represent pure computations, and can thus arise up in type-level constructs such as [propositions](#propositions). 
+
+#### Length Constants
+
+When specifying (for example) data formats, it is important to know the length of an encryption key. For this purpose, Owl supports the syntax `|LC|`, where `LC` here is the name for a length constant. For example, type `Data<adv> | |nonce| |` is parsed as follows:
+
+- `Data<adv> | a |` is a type, whenever `a` is an atomic expression;
+- `|nonce|` is an atomic expression, since `nonce` is the name for a length constant (which specifies the length of names of type `nonce`).
+
+The supported length constants currently are: 
+
+- `nonce`; for the length of `get(N)` if `N : nonce`;
+- `DH`, for the length of `get(N)` if `N : DH`. Note that this is a Diffie-Hellman _secret_ (i.e., exponent), not a group element;
+- `enckey`; for the length of `get(N)` if `N : enckey T`;
+- `pke_sk`; for the length of `get(N)` if `N : pkekey T`;
+- `sigkey`; for the length of `get(N)` if `N : sigkey T`;
+- `kdfkey`; for the length of `get(N)` if `N` is a [KDF key](./hkdf.md)
+- `mackey`; for the length of `get(N)` if `N : mackey T`;
+- `signature`; for the length of the result of [`sign`](./signatures.md);
+- `pke_pk`; for the length of `enc_pk(x)` when `x` is a secret key for public-key encryption (i.e., has type `Name(N)` if `N : pkekey T`);
+- `vk`; for the length of `vk(x)` when `x` is a signing key (i.e., has type `Name(N)` if `N : sigkey T`);
+- `maclen`; for the length of a MAC computed by [`mac`](./mac.md)
+- `tag`; for the length of an enum tag (typically one byte);
+- `counter`; for the length of a counter, used primarily by [authenticated encryption](./aenc.md);
+- `crh`; for the length of a [collision-resistant hash](./crh.md);
+- `group`; for the length of a [group element](./hkdf.md). 
+
+#### Grammar
+
+```
+a ::= // atomic expr
+    | a * a // integer multiplication
+    | a ++ a // concatenation
+    | a1 &&& a2 // if a1 : Lemma p1, and a2 : Lemma p2, then a1 &&& a2 : Lemma (p1 /\ p2)
+    | a1 && a2 // Boolean conjunction
+    | a1 + a2  // integer addition
+    | !a // Boolean negation
+    | () // unit
+    | true
+    | false 
+    | "<alphanum>" // Strings
+    | 0x<hexConst> // Hex const; e.g., 0x1234. 0x is the empty hex constant.
+    | <natural>    // Integers; e.g., 67. 
+    | | LC | // Length constants, where LC is a name of a length constant. 
+    | gkdf<nks; j>(a, b, c) // KDF operation in Ghost. nks is a row of name kinds (separated by ||); j is an integer index into this row, and a, b, c are atomic exprs.
+    | get(N) // obtain the value of a base name N.
+    | get_encpk(N) // obtain the public key for N, if N : Name corresponds to a public encryption key.
+    | get_vk(N) // obtain the verification key for N, if N : Name corresponds to a signing key.
+    | f<...>(x, y, .., z) // apply function symbol f to arguments x, y, ..., z : atomic expr. Inside <...> are _function parameters_ (used mainly for index arguments to constructors for structs and enums).
+    | x // x is a variable
+```
 
 ### Assert/assume
 
@@ -443,4 +543,4 @@ TODO
 
 ### Debug Expressions
 
-### Atomic expressions
+## Declarations
