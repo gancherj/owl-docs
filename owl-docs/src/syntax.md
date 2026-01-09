@@ -447,6 +447,23 @@ Assert statements carry propositions, and fail to type check if the SMT solver f
 
 Propositions can show up in [refinement types](#refinement-types), [if-then-else types](#if-then-else-types), [assert/assume expressions](#assertassume), and [pcase expressions](#case-splitting-on-a-proposition), among other places.
 
+### Predicates
+
+A predicate is a [proposition](#propositions)-level macro. An example is below:
+
+```owl
+locality alice
+
+predicate ok(v) = 
+    (v == 0x1234 \/ v == 0x2345)
+
+def foo(x : (v:Data<adv>{ok[v]})) @ alice : Unit = 
+    assert (x != 0x5555);
+    ()
+```
+
+Predicates do not require type annotations on its arguments, since at the level of propositions, all values are bitstrings. Note that when we apply `ok`, we must use square brackets (such as `ok[v]`); this is a current limitation of the parser. 
+
 ### Grammar
 
 ```
@@ -505,6 +522,21 @@ The supported length constants currently are:
 - `crh`; for the length of a [collision-resistant hash](./crh.md);
 - `group`; for the length of a [group element](./hkdf.md). 
 
+#### User-defined functions
+
+In Owl, we can define `func`s, which are atomic expression-level macros. A mininal example is below:
+
+```owl
+locality alice
+
+func make_foo(x) = 
+    x ++ 0x1234
+
+def foo() @ alice : Unit =
+    input i in
+    output make_foo(i)
+```
+
 #### Grammar
 
 ```
@@ -544,3 +576,107 @@ a ::= // atomic expr
 ### Debug Expressions
 
 ## Declarations
+
+Above, we have seen examples of declaring [names](#labels), methods via `def` (see [here](#labels) and [here](#indices)), [structs and enums](#structs-enums-and-option-types), and [localities](#localities). Below, we outline a number of additional top-level declarations used in Owl protocols.
+
+### Type and Name Type definitions
+
+One can give abbrevations for both types and name types:
+
+```owl
+locality alice
+locality bob
+
+nametype my_nonce = nonce
+
+name m : my_nonce @ alice 
+
+type my_msg_t = Name(m)
+
+def client(v : my_msg_t) @ alice : Unit = 
+    assert (v == get(m));
+    ()
+```
+
+Name type abbreviations may also carry index arguments:
+```owl
+locality alice
+name m<i> : nonce @ alice
+
+nametype my_key<i> = enckey Name(m<i>)
+
+name k<i> : my_key<i> @ alice
+
+def client<i>(my_k : Name(k<i>)) @ alice : Unit = 
+    let c = aenc(my_k, get(m<i>)) in
+    ()
+```
+
+### Corruption declarations
+
+It is often necessary to restrict the adversary model by asserting that certain names are known to the adversary by default. We do this with a _corruption declaration_, which is as follows:
+
+```owl
+locality alice
+
+name n : nonce @ alice
+name m : nonce @ alice
+
+corr [n] ==> [m] // If n is corrupt, m is as well
+```
+
+All corruption declarations in Owl are hypothetical, and have the form `corr L1 ==> L2`; this emits the axiom that if `L1 <= adv`, then `L2 <= adv`. One can add non-hypothetical corruption axioms by letting the left-hand side be `adv`:
+
+```owl
+locality alice
+
+name n : nonce @ alice
+corr adv ==> [n]
+```
+
+The above constructs a name `n` which Owl trusts is randomly generated, but readable by the adversary. 
+
+Corruption declarations can be indexed:
+```owl
+locality alice
+
+name n<i> : nonce @ alice 
+name m<i> : nonce @ alice 
+
+corr<i> [m<i>] ==> [n<i>]
+```
+
+### ODH Declarations
+
+To associate Diffie-Hellman shared secrets with hash permissions, one can use an ODH declaration. More detail is given [here](./hkdf.md).
+
+### Counter Declarations
+
+Owl has a notion of a monotonic counter, which is used primarily for authenticated encryption (but can be used for other purposes). An example is given below:
+
+```owl
+locality alice
+
+counter C @ alice
+
+def foo() @ alice : Unit = 
+    inc_counter C; // Increments the counter by one
+    let x : (v:Data<adv>{length(v) == |counter|}) = get_counter C in 
+    ()
+```
+
+Counters support two operations: `inc_counter`, which increments it by one; and `get_counter`, which returns the current value of the counter. Owl doesn't currently model that the counter is monotonic, but the fact that we cannot reset or decrement the counter guarantees monotonicity. 
+More details are given [here](./aenc.md). 
+
+### Predicate Declarations
+
+Details [here](#predicates).
+
+### Func Declarations
+
+Details [here](#user-defined-functions)
+
+
+
+
+
