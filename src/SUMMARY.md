@@ -13,4 +13,6 @@
     - [MACs](./mac.md)
     - [HKDF](./hkdf.md)
 
+# The Owl Compiler
 
+- [Compiler Reference](./compiler.md)
