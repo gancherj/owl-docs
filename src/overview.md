@@ -4,6 +4,8 @@ Owl is a programming language and proof assistant designed to help developers bu
 
 The intended workflow of Owl is as follows: first, the developer writes a protocol in the [Owl language](./example.md), which uses information-flow and refinement types to specify and prove security. Then, the protocol can be extracted using our [compiler](./compiler.md) into a high-performance implementation in [Verus](https://verus-lang.github.io/verus/guide/), an extension of Rust with formal verification capabilities, that is guaranteed by construction to be functionally correct and secure against source-level side channels. 
 
+The repository for Owl can be found [here](https://github.com/secure-foundations/owl).
+
 ## Owl's Design
 
 The Owl language is backed by two main programming language technologies: [_information-flow types_](https://www.cs.cornell.edu/andru/papers/jsac/sm-jsac03.pdf), which reasons about the secrecy information of data in the program; and [_refinement types_](https://arxiv.org/abs/2010.07763), which use SMT solvers (we use [Z3](https://github.com/Z3Prover/z3)) to imbue types with logical specifications.  
