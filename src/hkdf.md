@@ -2,7 +2,7 @@
 
 Most protocols performing key exchange include _key derivation_, where secret keys are created out of (a combination of) prior protocol secrets. Owl supports reasoning about key derivation via a type-based model of [HKDF](https://en.wikipedia.org/wiki/HKDF), the dominant key derivation algorithm used in modern protocols.  
 
-## Background on HKDF
+## Background on HKDF, and Assumptions
 
 The HKDF algorithm (combining the `extract` and `expand` phases) takes four arguments:
 
@@ -20,6 +20,7 @@ Intuitively, given an HKDF call `res = HKDF(salt, info, ikm, N)`, we assume that
 - The `IKM` contains a Diffie-Hellman shared secret, where both Diffie-Hellman keys are secret.
 
 We assume that the `info` may be public and adversarially-controlled. 
+
 
 Additionally, in certain instances, the HKDF algorithm is allowed to leak values of the form `HKDF(salt, h^x, ikm, N)` to the adversary, even when `x` is a secret and `h` is adversarially-chosen. (This is the PRF-ODH assumption).
 
@@ -140,9 +141,70 @@ odh L :
 
 To use `odh`, one first needs two names of name type `DH`. Then, we give an identifier for the ODH declaration (here, `L`). Then, after specifying the two names `X` and `Y`, and after the `->`, we have the same syntax as a [`dualkdf` name](#uniform-secrets-in-ikm-position-dualkdf-type).
 
+ODH declarations can be indexed, if one of the DH names have an index:
+```owl
+...
+
+name X<i> : DH @ alice
+name Y : DH @ alice
+
+odh L<i> : 
+    X<i>, Y -> { ... }
+```
+
+
 
 ## Calling KDF
 
+To call HKDF, we use the following syntax:
+
+```owl
+let derived_key = kdf<SALT_HINTS; IKM_HINTS; NAME_ROW; INDEX>(salt, ikm, info) in 
+...
+```
+
+The first two parameteters to `kdf`, `SALT_HINTS` and `IKM_HINTS`, are hints to the type checker to prove that the given KDF call is a secure one, as will be defined below. These parameters have the following syntax:
+
+```
+HINT ::= PositiveInt // Used for indexing into the desired row for a kdf / dualkdf key
+
+// We may have multiple hints, if there are multiple possible values for the salt key. Typically, there is only one. 
+// It may be empty, if no salt key is used.
+SALT_HINTS ::= comma_separated_list_of(HINT) 
+
+IKM_HINT ::= HINT // Similar to the hint for a salt key. Used for a dualkdf key.
+            // Used for an ODH call.
+            | odh ODH_DECL [ HINT ]
+
+// Also may be nonempty if no key / shared secre in IKM position is to be used. 
+IKM_HINTS ::= comma_separated_list_of(IKM_HINT)
 
 
+NAME_KIND ::= kdfkey | enckey | mackey | nonce | "nonce" "|" SYM_LEN "|" // Essentially a name type, but without the corresponding type annotation. 
+NAME_ROW ::= <empty> | NAME_KIND "||" NAME_ROW // A list of name kinds separated by ||
+
+INDEX ::= PositiveInt // Used for indexing into the name row
+```
+
+In [the compiler](./compiler.md), a call to `kdf<..; ...; NAME_ROW; idx>(x, y, z)`  is interpreted as `HKDF.Expand(HKDF.Extract(x, y,z ), N)`, where `N` is defined by the length of `NAME_ROW[i]`.
+
+### Typing Rule for KDF
+
+We first give an overview of how KDF operates before going into detail.
+
+### Overview of using KDF in Owl
+
+The role of `kdf` is to return a fresh, random secret. We encode this in Owl by introducing a new expression form for names: `KDF<NAME_ROW; idx; nt>(x, y, z)`, which corresponds to the result of calling `kdf` with the given `NAME_ROW`, index `idx`, and inputs `x, y, z`. Here, `nt` is the name type that is assigned to the result of the KDF. 
+
+Similar to other cryptographic operations, a call to `kdf<..;..;NAME_ROW:idx>(x, y, z)` has three possible valid outcomes: either:
+
+- All inputs are public, in which case the output will be public; or 
+- The type checker can prove that the inputs are suitably secret and well-typed, in which case the output will have type `Name(KDF<NAME_ROW; idx; nt>(x, y, z))`, where `nt` is the name type uniquely determined by the inputs to the KDF; or 
+- A certain condition related to the [PRF-ODH](#background-on-hkdf-and-assumptions) holds, wheree we are hashing a value of the form `h^x`, where `x` is secret, but `h` is "out of bounds" for the protocol (detailed below). In this case, the output will also be public.
+
+**Reflecting KDF in Ghost.** In all cases, the output of KDF is refined to be equal to `gkdf<NAME_ROW; idx>(x, y, z)`, which is a ghost-level [atomic expression](./syntax.md) for the result of the KDF call. 
+
+### Details of Typing Rule
+
+TODO
 
