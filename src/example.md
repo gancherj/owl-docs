@@ -1,7 +1,7 @@
 # Owl by Example: Encrypted Key
 
 We begin with an example: suppose Alice and Bob already have a 
-pre-shared key, `psk`, and want to use it to exchange a data key, `k_data`. so that later on, they can use `k_data` to exhange a secret nonce `x`:
+pre-shared key, `psk`, and want to use it to exchange a data key, `k_data`, so that later on, they can use `k_data` to exhange a secret nonce `x`:
 
     A, B already have key psk 
 
@@ -37,13 +37,14 @@ Name declarations are of the form `name N : nt @ L`, where `N` is the identifier
 
 #### Name Types
 
+<!-- A nonce isn't necessarily random; e.g,. we use it for Wireguard messages, right?  Maybe "opaque, unknown data"? -->
 Name types constrain how the name is sampled and how it may be used. We see two name types above: `nonce`, which corresponds to opaque, random data; and
 `enckey t`, which corresponds to an authenticated symmetric encryption key (e.g., AES-GCM) for data of type `t`. Additional name types include `sigkey t` for signing keys, `mackey t` for message authentication codes (MACs), and `DH`, for Diffie-Hellman keys. 
 
 #### Encryption Keys in Owl
 
-The name type `enckey t` contains a type, `t`, for the underlying data the key is meant to encrypt. In our example, `psk` encrypts data of type `Name(k_data)`. Here, `Name(n)` is a _singleton_ type for the value of name `n`; thus, our protocol will maintain and enforce that (unless `psk` is corrupt) that valid ciphertexts under `psk` only contain `k_data`, and nothing else. Similarly, 
-`k_data` only may encrypt the value of `x`. 
+The name type `enckey t` contains a type, `t`, for the underlying data the key is meant to encrypt. In our example, `psk` encrypts data of type `Name(k_data)`. Here, `Name(n)` is a _singleton_ type for the value of name `n`; thus, our protocol will maintain and enforce that (unless `psk` is corrupt) valid ciphertexts under `psk` only contain `k_data`, and nothing else. Similarly, 
+`k_data` may only encrypt the value of `x`. 
 
 ### Structs and Enums 
 
@@ -85,17 +86,18 @@ The key and plaintext are given by `get(psk)` and `get(k_data)`; here, `get(N)` 
 Next, Line 3 performs an output, which sends the value `c` to the network. In Owl, we protect security against an attacker who we assume controls the entire network. Indeed, Alice and Bob cannot talk to each other directly, but only through the attacker-controlled network. 
 
 After outputting the ciphertext, Alice moves to the second stage, where she gets a message from Bob and attempts to decrypt it. Line 4 performs an `input` expression, retrieving a message from the network and binding it to `i`. 
-Since the attacker controls the network, we don't have any guarantee about the value of `i`, other than it came from the attacker; thus, `i` has type `Data<adv>`, which stands for arbitrary public data, possibly controlled by the attacker. Here, `adv` is a _label_, which is used to specify information flow properties. We'll explain labels below.
+Since the attacker controls the network, we don't have any guarantee about the value of `i`, other than it came from the attacker; thus, `i` has type `Data<adv>`, which stands for arbitrary public data, possibly controlled by the attacker. Here, `adv` is a _label_, which is used to specify information-flow properties. We'll explain labels below.
 
-The central invariant of Owl is that all data flowing in an out of the attacker has label `Data<adv>`. Thus, Owl checks in Line 3 that `c` has type `Data<adv>` as well.
+The central invariant of Owl is that all data flowing in and out of the attacker has label `Data<adv>`. Thus, Owl checks in Line 3 that `c` has type `Data<adv>` as well.
 
-#### Labels, Decryption and `corr_case`
+#### Labels, Decryption, and `corr_case`
 
 Now, Alice needs to perform the decryption using `k_data`. Since all cryptography in Owl is strongly typed, we expect that the result of decryption will have the type corresponding to `k_data`'s name type, `Name(x)`. 
 
-However, this is _not_ the case if `k_data` is obtained by the attacker (e.g., the attacker gains access to Alice's local disk to read `k_data`). We model this capability of the attacker by allowing it to _corrupt_ a set of names before protocol execution. This set of names is given by the information flow label, `adv`. Labels are intuitively sets of names, along with the symbolic label `adv` for the adversary:
+However, this is _not_ the case if the attacker can obtain `k_data` (e.g., if the attacker gains access to Alice's local disk to read `k_data`). We model this capability of the attacker by allowing it to _corrupt_ a set of names before protocol execution. This set of names is given by the information flow label, `adv`. Labels are intuitively sets of names, along with the symbolic label `adv` for the adversary:
+<!-- Explain 0 and /\ ? -->
 ``` L ::= 0 | [n] (where n is a name) | L /\ L | adv ```
-Labels support a _flows-to_ partial order, `L1 <= L2`, which says if the set of dependencies in `L1` is captured by `L2`. 
+Labels support a _flows-to_ partial order, `L1 <= L2`, which says that the set of dependencies in `L1` is captured by `L2`. 
 
 If the name `k_data` is corrupt, then when Alice decrypts `i` under `k_data`, we shouldn't expect the result to be `x`; for example, the attacker could encrypt its own nonce under `k_data` instead! This is reflected in the type we compute for `res`, in Line 6:
 `res : if sec(k_data) then Option (Name(x)) else Option(Data<adv>)`. 

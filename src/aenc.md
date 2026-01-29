@@ -4,7 +4,6 @@ In Owl, symmetric encryption is performed via _authenticated encryption_. We ass
 
 There are _two_ closely associated cryptographic abstractions Owl uses for symmetric encryption. The first, simply given by the name type `enckey T` (where `T` is a [type](./syntax.md#types)), is ["textbook" encryption](#textbook-encryption), where encryption takes two arguments --- the key and the message --- and decryption similarly takes two arguments --- the key and the ciphertext. In this "textbook" version, the nonce used by the symmetric cipher is randomly generated as part of compilation (and canonically appended to the ciphertext). 
 
-> [!NOTE]
 > Owl proves _asymptotic security_, which means that security issues arising from sampling the same nonce twice are out of scope. For this reason, the user should be aware of the concrete cipher implementation being used along with domain considerations when using textbook encryption.
 
 In the [second version](#stateful-aead), we allow more precice control via a stateful AEAD primitive. In this version, the Owl program is able to use a monotonically increasing counter for encryption, and associate an AAD (additional authenticated data) to each ciphertext. This is the encryption scheme that is used for WireGuard. 

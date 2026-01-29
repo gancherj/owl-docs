@@ -4,7 +4,7 @@ Below serves as a reference to the syntax of Owl.
 
 ## Overview
 
-Owl is composed of _specification-level_ objects, such as [names](#names) and [(data) types](#types), and [expressions](#expressions), which are meant to be run. 
+Owl is composed of _specification-level_ objects, such as [names](#names) and [(data) types](#types), and executable [expressions](#expressions), which are meant to be run. 
 
 The specification-specific syntax of Owl is stratified in a number of layers: 
 - [names](#names), which are type-level cryptographic keys;
@@ -34,6 +34,7 @@ Name declarations (among other things) can be _indexed_, as so:
 name k<i, j @ k> : enckey t @ loc<k>
 ```
 
+<!-- Is the dual use of `k` intended here? -->
 This creates a name `k` indexed by two _session IDs_, `i` and `j`, and a _party ID_ `k`. All indices may be used in the type `t`, but only party IDs may be used in the associated locality. 
 
 ### KDF Names
