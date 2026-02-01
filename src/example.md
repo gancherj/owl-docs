@@ -97,6 +97,7 @@ Now, Alice needs to perform the decryption using `k_data`. Since all cryptograph
 However, this is _not_ the case if the attacker can obtain `k_data` (e.g., if the attacker gains access to Alice's local disk to read `k_data`). We model this capability of the attacker by allowing it to _corrupt_ a set of names before protocol execution. This set of names is given by the information flow label, `adv`. Labels are intuitively sets of names, along with the symbolic label `adv` for the adversary:
 <!-- Explain 0 and /\ ? -->
 ``` L ::= 0 | [n] (where n is a name) | L /\ L | adv ```
+Here, `0` is the empty set of names, while `L1 /\ L2` corresponds to set union. 
 Labels support a _flows-to_ partial order, `L1 <= L2`, which says that the set of dependencies in `L1` is captured by `L2`. 
 
 If the name `k_data` is corrupt, then when Alice decrypts `i` under `k_data`, we shouldn't expect the result to be `x`; for example, the attacker could encrypt its own nonce under `k_data` instead! This is reflected in the type we compute for `res`, in Line 6:
