@@ -12,15 +12,15 @@ The Owl language is backed by two main programming language technologies: [_info
 
 The key novelty of Owl is that information-flow and refinement types, on their own, are not enough. We also need to faithfully model the security guarantees of cryptographic operations, such as [encryption](./aenc.md). To do this, Owl's type system comes with a [soundness proof](https://eprint.iacr.org/2023/473.pdf) that _every well-typed protocol is cryptographically secure_. 
 
-In addition to formal verification of protocol _designs_, Owl also enables protocol developers to automatically extract real-world code that one can link with. Our compiler, described in our [USENIX Security paper](https://eprint.iacr.org/2025/1092), uses Verus to compile Owl protocols into efficient, interoperable, side-channel resistant Rust libraries that are automatically formally verified to be correct. 
+In addition to formal verification of protocol _designs_, Owl also enables protocol developers to automatically extract real-world code that be incorporated into larger projects (both verified and unverified). Our compiler, described in our [USENIX Security paper](https://www.andrew.cmu.edu/user/bparno/papers/owlc.pdf), uses Verus to compile Owl protocols into efficient, interoperable, side-channel resistant Rust libraries that are automatically formally verified to be correct. 
 
 ### Comparisons between Owl and Other Tools
 
-There are two classes of verification tools which Owl intersects with: game-hopping cryptographic provers, based on relational program logics, such as [EasyCrypt](https://www.easycrypt.info); and "security protocol verifiers", such as [CryptoVerif](https://cryptoverif.inria.fr) and [Tamarin](https://tamarin-prover.com).
+Owl's approach intersects with two classes of verification tools: game-hopping cryptographic provers, based on relational program logics, such as [EasyCrypt](https://www.easycrypt.info); and "security protocol verifiers", such as [CryptoVerif](https://cryptoverif.inria.fr) and [Tamarin](https://tamarin-prover.com).
 
-Compared to EasyCrypt, Owl is less general but significantly more automated. EasyCrypt allows the user to prove arbitrary cryptographic theorems using an expressive probabilistic logic; on the other hand, Owl is specifically targeted at security protocols, such as [WireGuard](https://wireguard.com) [HPKE](https://datatracker.ietf.org/doc/rfc9180/).  
+Compared to EasyCrypt, Owl is less general but significantly more automated. EasyCrypt allows the user to prove arbitrary cryptographic theorems using an expressive probabilistic logic; on the other hand, Owl is specifically targeted at security protocols, such as [WireGuard](https://wireguard.com) and [HPKE](https://datatracker.ietf.org/doc/rfc9180/).  
 
-Compared to CryptoVerif and Tamarin, the advantage of Owl is that its type system guarantees the properties of [_computational security_](https://www.cs.princeton.edu/courses/archive/fall07/cos433/lec3.pdf), _compositionality_, and a high degree of _proof automation_. 
+Compared to CryptoVerif and Tamarin, Owl's advantage is that its type system guarantees the properties of [_computational security_](https://www.cs.princeton.edu/courses/archive/fall07/cos433/lec3.pdf), _compositionality_, and a high degree of _proof automation_. 
 
 
 ## Calling Owl
@@ -33,3 +33,16 @@ cabal run owl -- test.owl --log-typecheck
 
 which will output debug and progress information.
 
+## Owl-related Research
+
+[Owl: Compositional Verification of Security Protocols via an Information-Flow Type System](https://www.andrew.cmu.edu/user/bparno/papers/owl.pdf).
+Joshua Gancher, Sydney Gibson, Pratap Singh, Samvid Dharanikota, & Bryan Parno.
+In Proceedings of the IEEE Symposium on Security and Privacy, 2023. 
+
+[OwlC: Compiling Security Protocols to Verified, Secure, High-Performance Libraries](https://www.andrew.cmu.edu/user/bparno/papers/owlc.pdf).
+Pratap Singh, Joshua Gancher, & Bryan Parno. 
+In Proceedings of the USENIX Security Symposium, 2025. 
+
+[Vest: Verified, Secure, High-Performance Parsing and Serialization for Rust](https://www.andrew.cmu.edu/user/bparno/papers/vest.pdf). 
+Yi Cai, Pratap Singh, Zhengyao Lin, Jay Bosamiya, Joshua Gancher, Milijana Surbatovich, Bryan Parno. 
+In Proceedings of the USENIX Security Symposium, 2025.

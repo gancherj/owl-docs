@@ -3,3 +3,6 @@ title = "Owl Book"
 authors = ["gancherj"]
 language = "en"
 
+[output.html]
+git-repository-url = "https://github.com/secure-foundations/owl"
+git-repository-icon = "fa-github"
