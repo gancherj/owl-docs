@@ -31,11 +31,10 @@ The type of `get(k)` is `Name(k)` (explained [below](#types)).
 Name declarations (among other things) can be _indexed_, as so:
 
 ```owl
-name k<i, j @ k> : enckey t @ loc<k>
+name N<i, j @ k> : enckey t @ loc<k>
 ```
 
-<!-- Is the dual use of `k` intended here? -->
-This creates a name `k` indexed by two _session IDs_, `i` and `j`, and a _party ID_ `k`. All indices may be used in the type `t`, but only party IDs may be used in the associated locality. 
+This creates a name `N` indexed by two _session IDs_, `i` and `j`, and a _party ID_ `k`. All indices may be used in the type `t`, but only party IDs may be used in the associated locality. 
 
 ### KDF Names
 
