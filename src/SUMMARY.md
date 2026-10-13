@@ -11,7 +11,7 @@
     - [Signatures](./signatures.md)
     - [Public Key Encryption](./pke.md)
     - [MACs](./mac.md)
-    - [HKDF](./hkdf.md)
+    - [HKDF and KDF Scopes](./hkdf.md)
 
 # The Owl Compiler
 
